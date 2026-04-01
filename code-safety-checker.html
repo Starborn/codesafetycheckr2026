@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Code Safety Checker — ESL Labs</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0a0e17;
+  --surface: #111827;
+  --surface-2: #1a2332;
+  --border: #1e2d3d;
+  --border-active: #3b82f6;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+  --critical: #ef4444;
+  --critical-bg: rgba(239, 68, 68, 0.08);
+  --critical-border: rgba(239, 68, 68, 0.25);
+  --high: #f97316;
+  --high-bg: rgba(249, 115, 22, 0.08);
+  --high-border: rgba(249, 115, 22, 0.25);
+  --medium: #eab308;
+  --medium-bg: rgba(234, 179, 8, 0.08);
+  --medium-border: rgba(234, 179, 8, 0.25);
+  --low: #22c55e;
+  --low-bg: rgba(34, 197, 94, 0.08);
+  --low-border: rgba(34, 197, 94, 0.25);
+  --safe: #10b981;
+  --safe-bg: rgba(16, 185, 129, 0.08);
+  --radius: 8px;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.header-icon {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem;
+}
+.header h1 {
+  font-family: var(--mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.header h1 span { color: var(--accent); }
+.subtitle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 2rem;
+  padding-left: 3.6rem;
+}
+
+/* Language tabs */
+.lang-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 4px;
+  width: fit-content;
+}
+.lang-tab {
+  padding: 0.4rem 1rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.lang-tab:hover { color: var(--text); }
+.lang-tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Editor area */
+.editor-container {
+  position: relative;
+  margin-bottom: 1rem;
+}
+.editor {
+  width: 100%;
+  min-height: 320px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: var(--text);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+  tab-size: 4;
+}
+.editor:focus { border-color: var(--border-active); }
+.editor::placeholder { color: var(--text-muted); }
+
+.editor-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.char-count { font-size: 0.75rem; color: var(--text-muted); font-family: var(--mono); }
+
+/* Buttons */
+.btn-row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.btn {
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text-dim);
+  border: 1.5px solid var(--border);
+}
+.btn-secondary:hover { border-color: var(--text-muted); color: var(--text); }
+
+/* Results */
+.results { margin-top: 2rem; }
+
+.score-banner {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius);
+  margin-bottom: 1.5rem;
+  border: 1.5px solid;
+}
+.score-banner.critical { background: var(--critical-bg); border-color: var(--critical-border); }
+.score-banner.high { background: var(--high-bg); border-color: var(--high-border); }
+.score-banner.medium { background: var(--medium-bg); border-color: var(--medium-border); }
+.score-banner.low { background: var(--low-bg); border-color: var(--low-border); }
+.score-banner.safe { background: var(--safe-bg); border-color: rgba(16,185,129,0.25); }
+
+.score-ring {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 3px solid;
+}
+.score-banner.critical .score-ring { border-color: var(--critical); color: var(--critical); }
+.score-banner.high .score-ring { border-color: var(--high); color: var(--high); }
+.score-banner.medium .score-ring { border-color: var(--medium); color: var(--medium); }
+.score-banner.low .score-ring { border-color: var(--low); color: var(--low); }
+.score-banner.safe .score-ring { border-color: var(--safe); color: var(--safe); }
+
+.score-info h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.15rem; }
+.score-info p { font-size: 0.85rem; color: var(--text-dim); }
+
+/* Stats row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  text-align: center;
+}
+.stat-num { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; }
+.stat-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
+.stat-card.has-critical .stat-num { color: var(--critical); }
+.stat-card.has-high .stat-num { color: var(--high); }
+.stat-card.has-medium .stat-num { color: var(--medium); }
+
+/* Finding cards */
+.findings-section { margin-bottom: 1.5rem; }
+.findings-header {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+  padding-left: 0.25rem;
+}
+
+.finding {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.finding.critical { border-left-color: var(--critical); }
+.finding.high { border-left-color: var(--high); }
+.finding.medium { border-left-color: var(--medium); }
+.finding.low { border-left-color: var(--low); }
+
+.finding-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+.finding-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.finding-badge {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.finding.critical .finding-badge { background: var(--critical-bg); color: var(--critical); }
+.finding.high .finding-badge { background: var(--high-bg); color: var(--high); }
+.finding.medium .finding-badge { background: var(--medium-bg); color: var(--medium); }
+.finding.low .finding-badge { background: var(--low-bg); color: var(--low); }
+
+.finding-desc { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem; }
+.finding-line {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  display: inline-block;
+}
+.finding-fix {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--safe);
+  padding-left: 0.5rem;
+  border-left: 2px solid rgba(16,185,129,0.3);
+}
+
+/* Footer */
+.app-footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.app-footer a { color: var(--accent); text-decoration: none; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .app { padding: 1rem; }
+  .header h1 { font-size: 1.2rem; }
+  .editor { min-height: 200px; font-size: 0.8rem; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useCallback } = React;
+
+// ─── ANALYSIS ENGINE ────────────────────────────────────────────
+
+const RULES = {
+  python: [
+    // CRITICAL
+    { id: 'py-eval', severity: 'critical', title: 'eval() / exec() detected', pattern: /\b(eval|exec)\s*\(/g, desc: 'Arbitrary code execution. Attacker-controlled input can run any Python code.', fix: 'Use ast.literal_eval() for data parsing, or a proper parser for expressions.' },
+    { id: 'py-pickle', severity: 'critical', title: 'Unsafe deserialization (pickle)', pattern: /\bpickle\.(loads?|Unpickler)\b/g, desc: 'Pickle can execute arbitrary code during deserialization.', fix: 'Use json, msgpack, or protobuf for untrusted data. If pickle is required, use hmac signing.' },
+    { id: 'py-subprocess-shell', severity: 'critical', title: 'Shell injection via subprocess', pattern: /subprocess\.(call|run|Popen)\s*\([^)]*shell\s*=\s*True/g, desc: 'shell=True with string commands enables shell injection attacks.', fix: 'Use subprocess.run([...list...]) without shell=True. Never interpolate user input into commands.' },
+    { id: 'py-os-system', severity: 'critical', title: 'os.system() command execution', pattern: /\bos\.system\s*\(/g, desc: 'Runs shell commands with no escaping. Highly vulnerable to injection.', fix: 'Use subprocess.run() with a list of arguments and shell=False.' },
+    { id: 'py-yaml-unsafe', severity: 'critical', title: 'Unsafe YAML loading', pattern: /yaml\.(load|unsafe_load)\s*\(/g, desc: 'yaml.load() without SafeLoader can execute arbitrary Python objects.', fix: 'Use yaml.safe_load() or yaml.load(data, Loader=yaml.SafeLoader).' },
+    { id: 'py-marshal', severity: 'critical', title: 'marshal/shelve deserialization', pattern: /\b(marshal\.loads?|shelve\.open)\s*\(/g, desc: 'Can execute arbitrary code during deserialization, similar to pickle.', fix: 'Use JSON or other safe serialization formats for untrusted data.' },
+
+    // HIGH
+    { id: 'py-hardcoded-secret', severity: 'high', title: 'Possible hardcoded secret', pattern: /(api[_-]?key|secret[_-]?key|password|token|auth|credentials?)\s*=\s*['\"][^'\"]{8,}/gi, desc: 'Credentials embedded in source code can be extracted from version control.', fix: 'Use environment variables (os.environ) or a secrets manager.' },
+    { id: 'py-requests-noverify', severity: 'high', title: 'SSL verification disabled', pattern: /verify\s*=\s*False/g, desc: 'Disabling SSL verification enables man-in-the-middle attacks.', fix: 'Keep verify=True (default). If you need custom CAs, point verify to a CA bundle.' },
+    { id: 'py-tempfile-insecure', severity: 'high', title: 'Insecure temp file creation', pattern: /\b(tempfile\.mktemp|os\.tempnam|os\.tmpnam)\s*\(/g, desc: 'Race condition vulnerability -- file can be replaced between creation and use.', fix: 'Use tempfile.mkstemp() or tempfile.NamedTemporaryFile() instead.' },
+    { id: 'py-sql-format', severity: 'high', title: 'Potential SQL injection', pattern: /(execute|cursor\.execute)\s*\(\s*(f['\"]|['\"].*%s.*['\"].*%|['\"].*\.format)/g, desc: 'String formatting in SQL queries allows injection attacks.', fix: 'Use parameterized queries: cursor.execute("SELECT * FROM t WHERE id = %s", (user_id,))' },
+
+    // MEDIUM
+    { id: 'py-requests', severity: 'medium', title: 'Network request detected', pattern: /\b(requests\.(get|post|put|patch|delete)|urllib\.request|httpx|aiohttp)\b/g, desc: 'Code makes outbound network requests. Verify URLs are trusted and data is not exfiltrated.', fix: 'Allowlist target URLs. Avoid sending sensitive data to external endpoints.' },
+    { id: 'py-file-write', severity: 'medium', title: 'File system write operation', pattern: /\bopen\s*\([^)]*['\"][wax]/g, desc: 'Writing to the file system. Check paths are not user-controlled.', fix: 'Validate and sanitize file paths. Use os.path.realpath() to prevent directory traversal.' },
+    { id: 'py-import-importlib', severity: 'medium', title: 'Dynamic import', pattern: /\b(__import__|importlib\.import_module)\s*\(/g, desc: 'Dynamic imports can load arbitrary modules at runtime.', fix: 'Use static imports. If dynamic loading is needed, validate module names against an allowlist.' },
+    { id: 'py-chmod', severity: 'medium', title: 'File permission change', pattern: /\bos\.chmod\s*\(/g, desc: 'Changing file permissions can weaken security boundaries.', fix: 'Ensure permissions follow least-privilege principle (e.g., 0o600 for sensitive files).' },
+
+    // LOW
+    { id: 'py-print-debug', severity: 'low', title: 'Debug print statements', pattern: /\bprint\s*\(.*\b(password|secret|key|token)\b/gi, desc: 'Printing sensitive values can expose them in logs.', fix: 'Remove debug prints or mask sensitive values before logging.' },
+    { id: 'py-assert', severity: 'low', title: 'Assert used for validation', pattern: /\bassert\b/g, desc: 'Assertions are stripped in optimized mode (-O). Do not use for input validation.', fix: 'Use if/raise ValueError() for input validation instead of assert.' },
+  ],
+
+  javascript: [
+    // CRITICAL
+    { id: 'js-eval', severity: 'critical', title: 'eval() detected', pattern: /\beval\s*\(/g, desc: 'Executes arbitrary JavaScript. Primary XSS and injection vector.', fix: 'Use JSON.parse() for data, Function constructor with extreme caution, or a proper parser.' },
+    { id: 'js-innerhtml', severity: 'critical', title: 'innerHTML with dynamic content', pattern: /\.innerHTML\s*=(?!=)/g, desc: 'Setting innerHTML with unsanitized input enables XSS attacks.', fix: 'Use textContent for text, or DOMPurify.sanitize() before setting innerHTML.' },
+    { id: 'js-doc-write', severity: 'critical', title: 'document.write() detected', pattern: /document\.write(ln)?\s*\(/g, desc: 'document.write with user input is a direct XSS vector.', fix: 'Use DOM APIs (createElement, appendChild) or a templating library.' },
+    { id: 'js-new-function', severity: 'critical', title: 'new Function() constructor', pattern: /new\s+Function\s*\(/g, desc: 'Dynamically creates functions from strings -- equivalent to eval().', fix: 'Refactor to use regular functions or closures.' },
+
+    // HIGH
+    { id: 'js-hardcoded-secret', severity: 'high', title: 'Possible hardcoded secret', pattern: /(api[_-]?key|secret[_-]?key|password|token|auth|credentials?)\s*[:=]\s*['\"][^'\"]{8,}/gi, desc: 'Credentials in client-side code are visible to anyone viewing source.', fix: 'Use environment variables (process.env) or a backend proxy for API calls.' },
+    { id: 'js-postmessage-noorigin', severity: 'high', title: 'postMessage without origin check', pattern: /addEventListener\s*\(\s*['\"]message['\"](?![^}]*origin)/g, desc: 'Listening to messages without verifying origin allows cross-origin attacks.', fix: 'Always check event.origin against an allowlist in the message handler.' },
+    { id: 'js-cors-star', severity: 'high', title: 'CORS wildcard (*)', pattern: /Access-Control-Allow-Origin['":\s]*\*/g, desc: 'Allowing all origins defeats same-origin policy protections.', fix: 'Restrict to specific trusted origins.' },
+    { id: 'js-child-process', severity: 'high', title: 'Child process execution (Node)', pattern: /child_process|\.exec\s*\(|\.spawn\s*\(/g, desc: 'Executing system commands from Node.js can lead to command injection.', fix: 'Use execFile() with an arguments array. Never pass user input to exec().' },
+
+    // MEDIUM
+    { id: 'js-fetch', severity: 'medium', title: 'Network request detected', pattern: /\b(fetch|axios|XMLHttpRequest|\.ajax)\s*\(/g, desc: 'Outbound network requests detected. Verify target URLs are trusted.', fix: 'Validate URLs against an allowlist. Do not send sensitive data to untrusted endpoints.' },
+    { id: 'js-localstorage-sensitive', severity: 'medium', title: 'Sensitive data in localStorage', pattern: /localStorage\.(set|get)Item\s*\(\s*['\"].*(token|key|secret|password|auth)/gi, desc: 'localStorage is accessible to any script on the page -- XSS can steal stored secrets.', fix: 'Use httpOnly cookies for auth tokens. Never store secrets client-side.' },
+    { id: 'js-regex-dos', severity: 'medium', title: 'Potentially vulnerable regex', pattern: /new\s+RegExp\s*\([^)]*\+/g, desc: 'Constructing regex from user input can cause ReDoS (denial of service).', fix: 'Validate and limit regex input. Use re2 or set timeouts for regex execution.' },
+    { id: 'js-fs-operations', severity: 'medium', title: 'File system operations (Node)', pattern: /\bfs\.(read|write|unlink|rm|mkdir|chmod|access)/g, desc: 'File operations with user-controlled paths can lead to directory traversal.', fix: 'Use path.resolve() and validate paths are within expected directories.' },
+
+    // LOW
+    { id: 'js-console-sensitive', severity: 'low', title: 'Console logging sensitive data', pattern: /console\.(log|info|warn|debug)\s*\(.*\b(password|secret|key|token)\b/gi, desc: 'Logging sensitive data exposes it in browser DevTools.', fix: 'Remove debug logging or mask sensitive values.' },
+    { id: 'js-todo-fixme', severity: 'low', title: 'TODO/FIXME/HACK comment', pattern: /\/\/\s*(TODO|FIXME|HACK|XXX|BUG)\b/gi, desc: 'Unresolved development notes may indicate incomplete security measures.', fix: 'Review and resolve before deployment.' },
+  ],
+
+  shell: [
+    // CRITICAL
+    { id: 'sh-eval', severity: 'critical', title: 'eval in shell script', pattern: /\beval\b/g, desc: 'eval in shell expands and executes arbitrary strings -- command injection risk.', fix: 'Avoid eval entirely. Use arrays for command construction.' },
+    { id: 'sh-curl-pipe', severity: 'critical', title: 'curl | sh pattern', pattern: /curl\s.*\|\s*(sh|bash|sudo)/g, desc: 'Piping remote content directly to a shell executes unverified code.', fix: 'Download first, inspect, then execute: curl -o script.sh URL && cat script.sh && bash script.sh' },
+    { id: 'sh-chmod-777', severity: 'critical', title: 'chmod 777 (world-writable)', pattern: /chmod\s+777\b/g, desc: 'Makes files readable, writable, and executable by everyone.', fix: 'Use minimal permissions: chmod 755 for executables, 644 for files, 600 for secrets.' },
+    { id: 'sh-unquoted-var', severity: 'critical', title: 'Unquoted variable expansion', pattern: /\$\{?\w+\}?(?=[^"'\s]*\s)/g, desc: 'Unquoted variables are subject to word splitting and glob expansion.', fix: 'Always quote variables: "$variable" instead of $variable.' },
+
+    // HIGH
+    { id: 'sh-hardcoded-cred', severity: 'high', title: 'Hardcoded credential', pattern: /(PASSWORD|SECRET|API_KEY|TOKEN)\s*=\s*['\"][^'\"]{4,}/gi, desc: 'Credentials in scripts end up in shell history and version control.', fix: 'Read from environment variables or a secrets file with restricted permissions.' },
+    { id: 'sh-sudo-nopasswd', severity: 'high', title: 'NOPASSWD sudo', pattern: /NOPASSWD/g, desc: 'Passwordless sudo removes an authentication barrier.', fix: 'Limit NOPASSWD to specific, vetted commands only.' },
+    { id: 'sh-rm-rf', severity: 'high', title: 'Recursive force delete', pattern: /rm\s+-[a-z]*r[a-z]*f|rm\s+-[a-z]*f[a-z]*r/g, desc: 'rm -rf with unvalidated paths can destroy critical data.', fix: 'Always validate the path first. Consider using trash/safe-rm instead.' },
+    { id: 'sh-wget-exec', severity: 'high', title: 'wget + execute pattern', pattern: /wget\s.*&&\s*(sh|bash|chmod)/g, desc: 'Downloading and executing remote scripts without verification.', fix: 'Verify checksums after download before executing.' },
+
+    // MEDIUM
+    { id: 'sh-no-set-e', severity: 'medium', title: 'Missing set -e / set -euo pipefail', pattern: /^(?!.*set\s+-[a-z]*e)/s, desc: 'Without set -e, the script continues after errors, potentially in a bad state.', fix: 'Add "set -euo pipefail" at the top of the script.' },
+    { id: 'sh-tmp-predictable', severity: 'medium', title: 'Predictable temp file path', pattern: /\/tmp\/[a-zA-Z_]+(?!\$)/g, desc: 'Hardcoded temp paths enable symlink attacks and race conditions.', fix: 'Use mktemp: tmpfile=$(mktemp /tmp/myapp.XXXXXX)' },
+  ]
+};
+
+function detectLanguage(code) {
+  const indicators = {
+    python: [/\bdef\s+\w+\s*\(/, /\bimport\s+\w+/, /\bfrom\s+\w+\s+import/, /\bclass\s+\w+.*:/, /^\s*#.*python/im, /print\s*\(/, /if\s+__name__\s*==/, /\.py\b/],
+    javascript: [/\bconst\s+\w+/, /\blet\s+\w+/, /\bvar\s+\w+/, /=>\s*{/, /function\s+\w+\s*\(/, /require\s*\(/, /import\s+.*from\s+['"]/, /console\.log/, /document\./, /window\./, /\.jsx?\b/, /\.tsx?\b/],
+    shell: [/^#!\/bin\/(ba)?sh/m, /\becho\s+/, /\bfi\b/, /\bdone\b/, /\besac\b/, /\$\{?\w+\}?/, /\bif\s+\[/, /\bfor\s+\w+\s+in\b/]
+  };
+  let best = 'python', bestScore = 0;
+  for (const [lang, patterns] of Object.entries(indicators)) {
+    const score = patterns.filter(p => p.test(code)).length;
+    if (score > bestScore) { bestScore = score; best = lang; }
+  }
+  return best;
+}
+
+function analyzeCode(code, language) {
+  const rules = RULES[language] || [];
+  const lines = code.split('\n');
+  const findings = [];
+
+  for (const rule of rules) {
+    // Special case: "missing" patterns (check absence)
+    if (rule.id === 'sh-no-set-e') {
+      if (language === 'shell' && !/set\s+-[a-z]*e/.test(code) && code.trim().length > 0) {
+        findings.push({ ...rule, lineNum: 1, lineContent: lines[0] });
+      }
+      continue;
+    }
+
+    let match;
+    const regex = new RegExp(rule.pattern.source, rule.pattern.flags);
+    while ((match = regex.exec(code)) !== null) {
+      const upToMatch = code.substring(0, match.index);
+      const lineNum = upToMatch.split('\n').length;
+      // Skip matches inside comments
+      const line = lines[lineNum - 1] || '';
+      const commentPrefixes = { python: '#', javascript: '//', shell: '#' };
+      const prefix = commentPrefixes[language];
+      const beforeMatch = line.substring(0, line.indexOf(match[0]));
+      if (prefix && beforeMatch.includes(prefix)) continue;
+
+      findings.push({
+        ...rule,
+        lineNum,
+        lineContent: line.trim(),
+        matchText: match[0]
+      });
+    }
+  }
+
+  // Dedup by rule+line
+  const seen = new Set();
+  const deduped = findings.filter(f => {
+    const key = `${f.id}:${f.lineNum}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return deduped.sort((a, b) => {
+    const order = { critical: 0, high: 1, medium: 2, low: 3 };
+    return (order[a.severity] ?? 4) - (order[b.severity] ?? 4);
+  });
+}
+
+function computeScore(findings) {
+  const weights = { critical: 25, high: 12, medium: 5, low: 1 };
+  const penalty = findings.reduce((sum, f) => sum + (weights[f.severity] || 0), 0);
+  return Math.max(0, 100 - penalty);
+}
+
+function scoreClass(score) {
+  if (score >= 90) return 'safe';
+  if (score >= 70) return 'low';
+  if (score >= 50) return 'medium';
+  if (score >= 25) return 'high';
+  return 'critical';
+}
+
+function scoreLabel(score) {
+  if (score >= 90) return 'Low Risk';
+  if (score >= 70) return 'Moderate';
+  if (score >= 50) return 'Elevated Risk';
+  if (score >= 25) return 'High Risk';
+  return 'Critical Risk';
+}
+
+// ─── SAMPLE CODE ────────────────────────────────────────────────
+
+const SAMPLES = {
+  python: `import os
+import pickle
+import requests
+
+API_KEY = "sk-1234567890abcdef"
+
+def process_user_input(user_data):
+    result = eval(user_data)
+    obj = pickle.loads(open("data.pkl", "rb").read())
+    os.system(f"echo {user_data}")
+    resp = requests.get("https://api.example.com", verify=False)
+    return result
+
+import subprocess
+subprocess.call("ls " + user_data, shell=True)`,
+
+  javascript: `const API_SECRET = "super_secret_key_12345";
+
+function processInput(data) {
+  const result = eval(data);
+  document.getElementById("output").innerHTML = data;
+  document.write("<p>" + data + "</p>");
+
+  fetch("https://api.example.com/data?key=" + API_SECRET);
+
+  localStorage.setItem("auth_token", response.token);
+
+  const handler = new Function("return " + data);
+}
+
+window.addEventListener("message", (event) => {
+  processInput(event.data);
+});`,
+
+  shell: `#!/bin/bash
+PASSWORD="hunter2"
+curl https://example.com/setup.sh | sudo bash
+chmod 777 /var/www/html
+rm -rf $DIRECTORY
+eval $USER_INPUT
+tmpfile=/tmp/myapp_data
+echo $UNQUOTED_VAR is risky`
+};
+
+// ─── COMPONENTS ─────────────────────────────────────────────────
+
+function App() {
+  const [code, setCode] = useState('');
+  const [language, setLanguage] = useState('python');
+  const [results, setResults] = useState(null);
+
+  const runAnalysis = useCallback(() => {
+    if (!code.trim()) return;
+    const detected = detectLanguage(code);
+    setLanguage(detected);
+    const findings = analyzeCode(code, detected);
+    const score = computeScore(findings);
+    setResults({ findings, score, language: detected, lines: code.split('\n').length });
+  }, [code]);
+
+  const loadSample = useCallback((lang) => {
+    setLanguage(lang);
+    setCode(SAMPLES[lang]);
+    setResults(null);
+  }, []);
+
+  const clearAll = useCallback(() => {
+    setCode('');
+    setResults(null);
+  }, []);
+
+  const exportReport = useCallback(() => {
+    if (!results) return;
+    const report = [
+      'CODE SAFETY ANALYSIS REPORT',
+      '=' .repeat(50),
+      `Date: ${new Date().toISOString()}`,
+      `Language: ${results.language}`,
+      `Lines analyzed: ${results.lines}`,
+      `Safety score: ${results.score}/100 (${scoreLabel(results.score)})`,
+      `Total findings: ${results.findings.length}`,
+      '',
+      'FINDINGS',
+      '-'.repeat(50),
+      ...results.findings.map((f, i) =>
+        `\n[${i + 1}] ${f.severity.toUpperCase()}: ${f.title}\n    Line ${f.lineNum}: ${f.lineContent}\n    ${f.desc}\n    Fix: ${f.fix}`
+      ),
+      '',
+      '-'.repeat(50),
+      'Generated by Code Safety Checker -- ESL Labs / Anthropomorphic Press',
+      'Static analysis only. Does not execute code.',
+    ].join('\n');
+
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'code-safety-report.txt'; a.click();
+    URL.revokeObjectURL(url);
+  }, [results]);
+
+  const counts = results ? {
+    critical: results.findings.filter(f => f.severity === 'critical').length,
+    high: results.findings.filter(f => f.severity === 'high').length,
+    medium: results.findings.filter(f => f.severity === 'medium').length,
+    low: results.findings.filter(f => f.severity === 'low').length,
+  } : null;
+
+  return (
+    <React.Fragment>
+      <div className="header">
+        <div className="header-icon">🛡</div>
+        <h1>Code <span>Safety</span> Checker</h1>
+      </div>
+      <div className="subtitle">Static analysis for Python, JavaScript, and Shell -- paste code, find risks.</div>
+
+      <div className="lang-tabs">
+        {['python', 'javascript', 'shell'].map(lang => (
+          <button key={lang} className={`lang-tab ${language === lang ? 'active' : ''}`} onClick={() => setLanguage(lang)}>
+            {lang === 'python' ? 'Python' : lang === 'javascript' ? 'JS / TS' : 'Shell'}
+          </button>
+        ))}
+      </div>
+
+      <div className="editor-container">
+        <textarea
+          className="editor"
+          value={code}
+          onChange={e => setCode(e.target.value)}
+          placeholder={`Paste your ${language} code here...`}
+          spellCheck={false}
+        />
+      </div>
+
+      <div className="editor-footer">
+        <span className="char-count">{code.length} chars · {code.split('\n').length} lines</span>
+        <div className="btn-row">
+          <button className="btn btn-secondary" onClick={() => loadSample(language)}>Load Example</button>
+          <button className="btn btn-secondary" onClick={clearAll}>Clear</button>
+          <button className="btn btn-primary" onClick={runAnalysis} disabled={!code.trim()}>Analyze Safety</button>
+        </div>
+      </div>
+
+      {results && (
+        <div className="results">
+          <div className={`score-banner ${scoreClass(results.score)}`}>
+            <div className="score-ring">{results.score}</div>
+            <div className="score-info">
+              <h2>{scoreLabel(results.score)}</h2>
+              <p>{results.findings.length === 0
+                ? 'No issues detected in static analysis.'
+                : `${results.findings.length} issue${results.findings.length > 1 ? 's' : ''} found across ${results.lines} lines of ${results.language}.`}</p>
+            </div>
+          </div>
+
+          <div className="stats-row">
+            <div className={`stat-card ${counts.critical > 0 ? 'has-critical' : ''}`}>
+              <div className="stat-num">{counts.critical}</div>
+              <div className="stat-label">Critical</div>
+            </div>
+            <div className={`stat-card ${counts.high > 0 ? 'has-high' : ''}`}>
+              <div className="stat-num">{counts.high}</div>
+              <div className="stat-label">High</div>
+            </div>
+            <div className={`stat-card ${counts.medium > 0 ? 'has-medium' : ''}`}>
+              <div className="stat-num">{counts.medium}</div>
+              <div className="stat-label">Medium</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-num">{counts.low}</div>
+              <div className="stat-label">Low</div>
+            </div>
+          </div>
+
+          {results.findings.length > 0 && (
+            <React.Fragment>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div className="findings-header">Detailed Findings</div>
+                <button className="btn btn-secondary" onClick={exportReport} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>Export Report</button>
+              </div>
+              {results.findings.map((f, i) => (
+                <div key={i} className={`finding ${f.severity}`}>
+                  <div className="finding-top">
+                    <span className="finding-title">{f.title}</span>
+                    <span className="finding-badge">{f.severity}</span>
+                  </div>
+                  <div className="finding-desc">{f.desc}</div>
+                  <span className="finding-line">Line {f.lineNum}: {f.lineContent}</span>
+                  <div className="finding-fix">Fix: {f.fix}</div>
+                </div>
+              ))}
+            </React.Fragment>
+          )}
+
+          {results.findings.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--safe)' }}>
+              No safety issues detected. Note: static analysis cannot catch all vulnerabilities -- consider dynamic testing and code review as well.
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="app-footer">
+        Code Safety Checker -- <a href="https://ronin-institute.org" target="_blank" rel="noopener">ESL Labs</a> / Anthropomorphic Press<br/>
+        Static analysis only. No code is executed. Your code never leaves your browser.
+      </div>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+</script>
+</body>
+</html>
