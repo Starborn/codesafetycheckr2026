@@ -4,8 +4,8 @@
 
 Live app: [https://starborn.github.io/codesafetycheckr2026/](https://starborn.github.io/codesafetycheckr2026/)
 
-Authors: Paola Di Maio ([W3C AIKR CG](https://www.w3.org/community/aikr/) Chair) & Claude (Anthropic)
-Affiliation: [Epistemic Systems Lab](https://ronin-institute.org), Ronin Institute / W3C AI Knowledge Representation CG
+Authors: Paola Di Maio ([W3C AIKR CG](https://www.w3.org/community/aikr/) Chair) & ESL
+
 Reference: [w3c/webai#23](https://github.com/w3c/webai/issues/23)
 
 ---
@@ -109,17 +109,6 @@ codesafetycheckr2026/
     shell/
   reports/            -- exported analysis reports
 ```
-
-## Companion Tool
-
-The **W3C Code Quality Checker** ([Colab notebook](https://github.com/w3c/webai/issues/23)) extends this approach to web standards compliance, checking HTML/CSS/JS against four W3C principles:
-
-- Accessibility (WCAG 2.2)
-- Internationalization (W3C I18N)
-- Privacy (W3C Privacy Principles)
-- Security (OWASP Top 10)
-
-Together, the two tools address both general code safety and web-specific standards compliance.
 
 ## Technical Details
 
