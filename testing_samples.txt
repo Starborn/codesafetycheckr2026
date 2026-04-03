@@ -1,0 +1,234 @@
+# Code Safety Checker -- Test Samples
+
+## PYTHON
+
+### Bad Code (should trigger many findings)
+
+```python
+import os
+import pickle
+import subprocess
+import yaml
+import requests
+
+API_KEY = "sk-proj-abc123def456ghi789"
+DB_PASSWORD = "hunter2_production"
+
+def handle_user_request(user_input):
+    # Arbitrary code execution
+    result = eval(user_input)
+    exec(compile(user_input, "<string>", "exec"))
+
+    # Unsafe deserialization
+    data = pickle.loads(open("cache.pkl", "rb").read())
+    config = yaml.load(open("config.yml"))
+
+    # Command injection
+    os.system(f"grep {user_input} /var/log/app.log")
+    subprocess.call("find / -name " + user_input, shell=True)
+
+    # Disabled SSL
+    resp = requests.get("https://api.example.com", verify=False)
+
+    # SQL injection
+    cursor.execute(f"SELECT * FROM users WHERE name = '{user_input}'")
+
+    # Insecure temp file
+    import tempfile
+    tmpname = tempfile.mktemp()
+
+    # Debug leak
+    print(f"User password is {password}")
+
+    # Dynamic import
+    mod = __import__(user_input)
+
+    assert user_input.isalnum()
+
+    return result
+```
+
+### Good Code (should pass clean)
+
+```python
+import json
+import logging
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+import yaml
+
+logger = logging.getLogger(__name__)
+
+
+def handle_user_request(user_input):
+    """Process user input safely."""
+
+    # Validate input
+    if not isinstance(user_input, str) or len(user_input) > 1000:
+        raise ValueError("Invalid input")
+
+    # Safe deserialization
+    with open("config.yml", "r") as f:
+        config = yaml.safe_load(f)
+
+    with open("data.json", "r") as f:
+        data = json.load(f)
+
+    # Safe subprocess -- no shell, list args
+    sanitized = user_input.strip()
+    completed = subprocess.run(
+        ["grep", "--", sanitized, "/var/log/app.log"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    # Parameterized SQL
+    cursor.execute(
+        "SELECT * FROM users WHERE name = %s",
+        (sanitized,),
+    )
+
+    # Safe temp file
+    fd, tmppath = tempfile.mkstemp(prefix="myapp_", suffix=".tmp")
+    try:
+        os.write(fd, completed.stdout.encode())
+    finally:
+        os.close(fd)
+
+    # Credentials from environment
+    api_key = os.environ.get("API_KEY")
+    if not api_key:
+        raise RuntimeError("API_KEY not set")
+
+    logger.info("Request processed successfully")
+    return data
+
+
+---
+
+## JAVASCRIPT
+
+### Bad Code (should trigger many findings)
+
+```javascript
+const API_SECRET = "whsec_a1b2c3d4e5f6g7h8i9";
+const DB_PASSWORD = "postgres_prod_2025";
+
+function processUserData(userInput) {
+  const result = eval(userInput);
+  const fn = new Function("return " + userInput);
+
+  document.getElementById("output").innerHTML = userInput;
+  document.write("<div>" + userInput + "</div>");
+
+  fetch("https://api.example.com/data?secret=" + API_SECRET);
+
+  localStorage.setItem("auth_token", result.token);
+  localStorage.setItem("secret_key", API_SECRET);
+
+  const child = require("child_process");
+  child.exec("ls " + userInput);
+
+  const re = new RegExp(userInput + "+$");
+
+  console.log("User password is", password);
+}
+
+window.addEventListener("message", (event) => {
+  processUserData(event.data);
+});
+
+// FIXME: add authentication
+```
+
+### Good Code (should pass clean)
+
+```javascript
+import DOMPurify from "dompurify";
+
+const ALLOWED_ORIGINS = ["https://app.example.com"];
+
+function processUserData(userInput) {
+  if (typeof userInput !== "string" || userInput.length > 5000) {
+    throw new Error("Invalid input");
+  }
+
+  const sanitized = DOMPurify.sanitize(userInput);
+  document.getElementById("output").textContent = sanitized;
+
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API_KEY not configured");
+
+  return fetch("/api/proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: sanitized }),
+  }).then((res) => {
+    if (!res.ok) throw new Error("Request failed");
+    return res.json();
+  });
+}
+
+window.addEventListener("message", (event) => {
+  if (!ALLOWED_ORIGINS.includes(event.origin)) return;
+  processUserData(event.data);
+});
+```
+
+---
+
+## SHELL
+
+### Bad Code (should trigger many findings)
+
+```bash
+#!/bin/bash
+PASSWORD="supersecret123"
+API_KEY="sk-prod-abcdefghijk"
+
+curl https://sketchy-site.com/install.sh | sudo bash
+wget https://example.com/tool.tar.gz && chmod +x tool && bash tool
+
+chmod 777 /var/www/html
+chmod 777 /etc/config
+
+rm -rf $USER_DIR
+rm -rf /tmp/$UNSANITIZED
+
+eval $USER_COMMAND
+
+tmpfile=/tmp/myapp_cache
+echo $UNQUOTED > $tmpfile
+```
+
+### Good Code (should pass clean)
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly APP_USER="appuser"
+
+main() {
+    local config_dir="${SCRIPT_DIR}/config"
+    local log_file
+    log_file="$(mktemp /tmp/deploy.XXXXXX.log)"
+
+    if [[ ! -d "${config_dir}" ]]; then
+        echo "Error: config directory not found" >&2
+        exit 1
+    fi
+
+    chmod 640 "${config_dir}/settings.yml"
+    chown "${APP_USER}:${APP_USER}" "${config_dir}/settings.yml"
+
+    echo "Deployment complete. Log: ${log_file}"
+}
+
+main "$@"
+```
